@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 import numpy as np
-import os, sys, getopt
+import os, sys, getopt, time
 
 # progress bar - for looks and debugging
 def progressbar(it, prefix="", size=60, out=sys.stdout): # Python3.3+
@@ -27,8 +27,13 @@ def readETAData(num,numOfETA, mglob, nglob, odir):
 def main(argv):
     # default vals for script
     dpi = 300   # dpi for figure
-    wid = 16
+    wid = 18
     leg = 5     # curse len()... this is length
+    dim = ''
+    xmin = -1
+    xmax = -1
+    ymin = -1
+    ymax = -1
 
     # parse *argv[] (is this securely done? no idea what's under the hood in c, so maybe...)
     logfilename = ''
@@ -36,7 +41,8 @@ def main(argv):
         print('warning: new args ignored\n')
     try:
         opts, args = getopt.getopt(argv, "hi:o:d:w:l:",
-            ["ifile=", "odir=", "dpi=", "wid=","len="])
+            ["ifile=", "odir=", "dpi=", "wid=","len=", 
+            "1d", "2d", "xmin=", "xmax=", "ymin", "ymax"])
     except getopt.GetoptError:
         print('fw2mov.py -i <inputlogfile.txt>')
         sys.exit(2)
@@ -57,9 +63,21 @@ def main(argv):
             wid = int(arg)
         elif opt in ("-l", "--len"):
             leg = int(arg)
+        elif opt in ("--1d"):
+            dim = "1d"
+        elif opt in ("--2d"):
+            dim = "2d"
+        elif opt in ("--xmin"):
+            xmin = int(arg)
+        elif opt in ("--xmax"):
+            xmin = int(arg)
+        elif opt in ("--ymin"):
+            ymin = int(arg)
+        elif opt in ("--ymax"):
+            ymax = int(arg)
     
     # parse log txt file
-        # here's to hoping that the i/o of FUNWAVE-TVD doesn't get reworked :P
+        # here's to hoping that the i/o of FUNWAVE-TVD doesn't get reworked
     print("--------------------")
     print("reading: " + logfilename)
     parse = ''
@@ -137,45 +155,57 @@ def main(argv):
     print("found: {:.3f}m as max eta".format(maxeta))
     print("--------------------")
     
-    print("producing figure")
-    fig = plt.figure(figsize=(wid,leg), dpi=dpi) #TODO arbitrate params
+    print("producing figure") 
+    fig = plt.figure(figsize=(wid,leg), dpi=dpi)
     ax = fig.add_subplot(1,1,1)
+    
+    if xmin < 0:
+        xmin = 0
+    if xmax < 0:
+        xmax = Mglob
+    if ymin < 0:
+        ymin = 0
+    if ymax < 0:
+        ymax = Nglob
 
     writer = FFMpegWriter(fps = 10)
-    with writer.saving(fig, 'mov.mp4', 400): #TODO
-        for i in progressbar(range(1,numeta + 1), "", 40):
-            surf = readETAData(i, numeta, Mglob, Nglob, odir)
-            x = np.linspace(0, Mglob, Mglob)
 
-            plt.clf()
-            plt.plot(x, surf[1,], '-c', linewidth = 0.2) #TODO
+    # if 1d, 2d not specifed, default behavior
+    if dim == '':
+        if Nglob <= 3:
+            dim = '1d'
+        else:
+            dim = '2d'
 
-            # Water Fill:
-            plt.fill_between(x, depth[1,:], surf[1,:],
-                             where = surf[1,:] > depth[1,:],
-                             facecolor = 'cyan', interpolate = True)
-            # Bottom Fill:
-            plt.fill_between(x, min(depth[1,:])-1, depth[1,:], 
-                             where= depth[1,:] > (depth[1,:]-2),       
-                             facecolor = '0.35', hatch = 'X')
+    if dim == '1d':
+        with writer.saving(fig, 'mov.mp4', dpi):
+            for i in progressbar(range(1,numeta + 1), "", 40):
+                surf = readETAData(i, numeta, Mglob, Nglob, odir)
+                x = np.asarray([float(xa) * dx for xa in range(Mglob)])
+                c = int(Nglob / 2)
 
-            plt.ylim((min(depth[1,:]) - 1, maxeta + 1))
-            plt.xlim((0, Mglob))
-            writer.grab_frame()
-        print("finishing...")
+                plt.clf()
+                plt.plot(x[xmin:xmax], surf[c,xmin:xmax], '-c', linewidth = 0.2)
+
+                # Water Fill:
+                plt.fill_between(x[xmin:xmax], depth[c,xmin:xmax], surf[c,xmin:xmax],
+                                where = surf[c,xmin:xmax] > depth[c,xmin:xmax],
+                                facecolor = 'cyan', interpolate = True)
+                # Bottom Fill:
+                plt.fill_between(x[xmin:xmax], min(depth[c,xmin:xmax])-1, depth[c,xmin:xmax], 
+                                where= depth[c,xmin:xmax] > (depth[c,xmin:xmax]-2),       
+                                facecolor = '0.35', hatch = 'X')
+
+                plt.ylim((min(depth[c,:]) - 1, maxeta + 1))
+                plt.xlim(xmin * dx, xmax * dx)
+                writer.grab_frame()
+            print("finishing...")
+    else: 
+        with writer.saving(fig, 'mov.mp4', dpi):
+            print("need to implement")
     plt.close()
 
 if __name__ == "__main__":
+    startTime = time.time()
     main(sys.argv[1:])
-
-# spongebob squarepants is a threat to society.
-# 1. he can shapeshift as well as stretch his limbs really long
-# 2. he seems to be able to make literally anything out of bubbles
-#    and sand, including weapons
-# 3. he has the power to control fire as shown by him making fires 
-#    underwater
-# 4. he cannot die or feel pain. he can safely get cut in half, have 
-#    his skin torn off or be crushed and not only live, but feel no pain
-# 5. he is capable of defeating people without even realizing they're 
-#    against him, as shown in that episode where the karate master challenges 
-#    him and he absolutely demolishes the poor dude without even realizing he was there
+    print("Runtime: {:f} seconds".format(time.time() - startTime))
