@@ -30,6 +30,18 @@ def breadETAData(num, mglob, nglob, odir):
     freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
     return freeSurface
 
+def readMaskData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'mask_{0:05d}'.format(fileIndex)
+    freeSurface = np.loadtxt(fileName)
+    return freeSurface
+
+def breadMaskData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'mask_{0:05d}'.format(fileIndex)
+    freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
+    return freeSurface
+
 # wow! this sure is the main function
 def main(argv):
     # default vals
@@ -41,15 +53,20 @@ def main(argv):
     xmax = -1       # these get calculated before figure creation
     ymin = -1
     ymax = -1
-    ftitle = '' # figure title
+    odir = ''
     outfiletype = 'ascii'   # output file i/o type, default to ascii (which is FUNWAVE default)
     fps = 15    # video fps
+    mint = 0
+    maxt = sys.maxsize
+    depthtype = ''
+    ismask = False
 
     # parse *argv[] (is this securely done? no idea what's under the hood in c, so maybe...)
     try:
-        opts, args = getopt.getopt(argv, "hi:o:d:w:l:",
+        opts, args = getopt.getopt(argv, "hi:o:",
             ["ifile=", "odir=", "dpi=", "wid=","len=", 
-            "1d", "2d", "xmin=", "xmax=", "ymin=", "ymax=", "ftitle=", "fps="])
+            "1d", "2d", "xmin=", "xmax=", "ymin=", "ymax=", 
+            "fps=", "maxt=", "mint=", "varrow="])
     except getopt.GetoptError:
         print('fw2mov.py -i <inputlogfile.txt>')
         sys.exit(2)
@@ -64,11 +81,11 @@ def main(argv):
                 sys.exit(2)
             else:
                 logfilename = arg
-        elif opt in ("-d", "--dpi"):
+        elif opt in ("--dpi"):
             dpi = int(arg)
-        elif opt in ("-w", "--wid"):
+        elif opt in ("--wid"):
             wid = int(arg)
-        elif opt in ("-l", "--len"):
+        elif opt in ("--len"):
             leg = int(arg)
         elif opt in ("--1d"):
             dim = "1d"
@@ -82,10 +99,15 @@ def main(argv):
             ymin = int(arg)
         elif opt in ("--ymax"):
             ymax = int(arg)
-        elif opt in ("--ftitle"):
-            ftitle = arg
         elif opt in ("--fps"):
             fps = int(arg)
+        elif opt in ("-maxt"):
+            maxt = int(arg)
+        elif opt in ("-mint"):
+            mint = int(arg)
+        elif opt in ("-o, --odir"):
+            odir = arg
+            print(odir)
 
     # parse log txt file
         # here's to hoping that the i/o of FUNWAVE-TVD doesn't get reworked
@@ -117,9 +139,10 @@ def main(argv):
                         print("parsed depth, depth type: " + depthtype)
                         print("parsed depthfilepath: "+ depthfilepath)
                     elif "DEPTH_FLAT" in parse[i]:
-                        depthtype = "flat"
                         depthflat = float(parse[i+1])
-                        print("parsed depth, depth type: flat (possibly slope)")
+                        if depthtype != "slope":
+                            depthtype = "flat"
+                            print("parsed depth, depth type: flat")
                         print("parsed depthflat: " + str(depthflat))
                     elif "BINARY" in parse[i]:
                         outfiletype = "binary"
@@ -132,19 +155,23 @@ def main(argv):
                     elif "Xslp" in parse[i]: 
                         xslp = float(parse[i + 1])
                         print("parsed xslp: " + str(xslp))
-                    # elif "PLOT_INTV" in parse[i]:               #NOT SURE IF NEEDED...
-                    #     plotint = float(parse[i + 1])
-                    #     print("parsed plotint: " + str(plotint))
+                    elif "PLOT_INTV" in parse[i]:               
+                        plotint = float(parse[i + 1])
+                        print("parsed plotint: " + str(plotint))
                     elif "RESULT_FOLDER" in parse[i]:
                         outputdir = parse[i].split(':')[1]
                         print("parsed output dir: "+ outputdir)
+                    elif "OUT_MASK" in parse[i]:
+                        ismask = True
     print("closing: " + logfilename)
     print("--------------------")
     
     # dir work
     wdir = os.path.dirname(os.path.realpath(__file__))
-    odir = os.path.join(wdir, outputdir)
-    # print(odir) # debugging fragment
+    if odir == '':
+        odir = os.path.join(wdir, outputdir)
+    else:
+        print("warning: using output directory specifed by -o,--odir")
     
     # init depth arr
     depoutfile = os.path.join(odir, "dep.out")
@@ -166,8 +193,9 @@ def main(argv):
     print("skimming output folder")
     if os.path.exists(depoutfile):
         print("found: dep.out")     # clarity purposes
-    numeta = -1                     # correcting for ETA00000
+    numeta = 0                      # correcting for ETA00000
     numsta = 0
+    nummask = 0
     maxeta = 0
 
     if outfiletype == 'binary':
@@ -177,14 +205,17 @@ def main(argv):
 
     for file in progressbar(os.listdir(os.fsencode(odir)), "", 40):
         filename = os.fsdecode(file)
-        if "eta" in filename:
+        if "eta" in filename and not "etamean" in filename:
             numeta = numeta + 1
             fs = readfunc(odir, filename, Nglob, Mglob)
             if (max(fs[1,]) >= maxeta):
                 maxeta = max(fs[1,])
         elif "sta" in filename:
-                numsta = numsta + 1
-    print("found: {:d} eta files".format(numeta)) # why did i start c string formatting here? good question...
+            numsta = numsta + 1
+        elif "mask" in filename and not "mask9" in filename:
+            nummask = nummask + 1
+    print("found: {:d} eta files".format(numeta))
+    print("found: {:d} mask files".format(nummask))
     print("found: {:d} sta files".format(numsta))
     print("found: {:.3f}m as max eta".format(maxeta))
     print("--------------------")
@@ -213,15 +244,20 @@ def main(argv):
 
     if outfiletype == 'binary':
         readfunc = lambda a, b, c, d : breadETAData(a, b, c, d)
+        maskfunc = lambda a, b, c, d : breadMaskData(a, b, c, d)
     else:
         readfunc = lambda a, b, c, d : readETAData(a, b, c, d)
+        maskfunc = lambda a, b, c, d : readMaskData(a, b, c, d)
 
     if dim == '1d':
-        with writer.saving(fig, 'mov.mp4', dpi):
+        with writer.saving(fig, 'mov_tint_{:d}_{:d}_xint_{:.0f}_{:.0f}.mp4'.format(mint, min(numeta,maxt), xmin, xmax), dpi):
             c = int(Nglob / 2)
             x = np.asarray([float(xa) * dx for xa in range(Mglob)])
-            for i in progressbar(range(1,numeta + 1), "", 40):
+            for i in progressbar(range(mint, min(numeta, maxt)), "", 40):
                 surf = readfunc(i, Mglob, Nglob, odir)
+                if ismask:
+                    mask = maskfunc(i, Mglob, Nglob, odir)
+                    surf = np.ma.masked_where(mask == 0, surf)
 
                 plt.clf()
                 plt.plot(x[xmin:xmax], surf[c,xmin:xmax], '-c', linewidth = 0.2)
@@ -240,13 +276,30 @@ def main(argv):
 
                 plt.xlabel('Length (m)', fontsize = 12, fontweight = 'bold')
                 plt.ylabel('Height (m)', fontsize = 12, fontweight = 'bold')
-                plt.title(ftitle, fontsize = 12, fontweight = 'bold')
+                plt.title("Time {:.5f} sec".format(plotint * i), fontsize = 12, fontweight = 'bold')
 
                 writer.grab_frame()
             print("finishing...")
     else: 
-        with writer.saving(fig, 'mov.mp4', dpi):
-            print("need to implement")
+        with writer.saving(fig, 'mov_tint_{:d}_{:d}_xint_{:.0f}_{:.0f}.mp4'.format(mint, min(numeta, maxt), xmin, xmax), dpi):
+            x = np.asarray([float(xa)*dx for xa in range(Mglob)])
+            y = np.asarray([float(ya)*dy for ya in range(Nglob)])
+            
+            for i in progressbar(range(mint, min(numeta, maxt)), "", 40):
+                surf = readfunc(i, Mglob, Nglob, odir)
+                if ismask:
+                    mask = maskfunc(i, Mglob, Nglob, odir)
+                    surf = np.ma.masked_where(mask == 0, surf)
+                
+                plt.clf()
+                plt.pcolor(x[xmin:xmax], y[ymin:ymax], surf, cmap = "coolwarm")
+                plt.xlabel('Y (m)', fontsize = 12, fontweight = 'bold')
+                plt.ylabel('X (m)', fontsize = 12, fontweight = 'bold')
+                plt.title("Time {:.5f} sec".format(plotint * i), fontsize = 12, fontweight = 'bold')
+                plt.colorbar().set_label(r'$\eta$'+' (m)', rotation=90)
+                plt.clim(-maxeta, maxeta)
+                writer.grab_frame()
+            print("finishing...")
     plt.close()
 
 if __name__ == "__main__":
