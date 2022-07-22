@@ -30,12 +30,14 @@ def breadETAData(num, mglob, nglob, odir):
     freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
     return freeSurface
 
+# readMaskData reads... mask data
 def readMaskData(num, mglob, nglob, odir):
     fileIndex = num
     fileName = odir+'/'+'mask_{0:05d}'.format(fileIndex)
     freeSurface = np.loadtxt(fileName)
     return freeSurface
 
+# readMaskData reading in binary
 def breadMaskData(num, mglob, nglob, odir):
     fileIndex = num
     fileName = odir+'/'+'mask_{0:05d}'.format(fileIndex)
@@ -56,13 +58,13 @@ def main(argv):
     odir = ''
     outfiletype = 'ascii'   # output file i/o type, default to ascii (which is FUNWAVE default)
     fps = 15    # video fps
-    mint = 0
-    maxt = sys.maxsize
+    mint = 0    # min time 
+    maxt = sys.maxsize  # max time
     depthtype = ''
     ismask = False
     isquiver = False
 
-    # parse *argv[] (is this securely done? no idea what's under the hood in c, so maybe...)
+    # parse *argv[] 
     try:
         opts, args = getopt.getopt(argv, "hi:o:",
             ["ifile=", "odir=", "dpi=", "wid=","len=", 
@@ -112,7 +114,6 @@ def main(argv):
             odir = arg
 
     # parse log txt file
-        # here's to hoping that the i/o of FUNWAVE-TVD doesn't get reworked
     print("--------------------")
     print("reading: " + logfilename)
     parse = ''
@@ -169,20 +170,20 @@ def main(argv):
     print("--------------------")
     
     # dir work
-    wdir = os.path.dirname(os.path.realpath(__file__))
-    if odir == '':
+    wdir = os.path.dirname(os.path.realpath(__file__))  # working directory
+    if odir == '':      # check if output specified in argv[]
         odir = os.path.join(wdir, outputdir)
     else:
         print("warning: using output directory specifed by -o,--odir")
     
     # init depth arr
-    depoutfile = os.path.join(odir, "dep.out")
-    if os.path.exists(depoutfile):
+    depoutfile = os.path.join(odir, "dep.out")  # attempt to find dep.out
+    if os.path.exists(depoutfile):  # if dep.out exists, use it to create depth data
         if outfiletype == "binary":
             depth = np.fromfile(depoutfile).reshape((Nglob, Mglob)) * -1
         else:
             depth = np.loadtxt(depoutfile) * -1
-    elif depthtype == "data":
+    elif depthtype == "data":       # else, resort to LOG.txt params
         depth = np.loadtxt(depthfilepath) * -1
     elif depthtype == "flat":
         depth = np.full((Nglob, Mglob), -depthflat)
@@ -194,19 +195,19 @@ def main(argv):
     # skim eta and sta
     print("skimming output folder")
     if os.path.exists(depoutfile):
-        print("found: dep.out")     # clarity purposes
-    numeta = 0                      # correcting for ETA00000
-    numsta = 0
-    nummask = 0
-    maxeta = 0
-    mineta = 0             
+        print("found: dep.out")     # print statement for clarity purposes
+    numeta = 0                      # number of eta files
+    numsta = 0                      # number of sta files
+    nummask = 0                     # number of mask files
+    maxeta = 0                      # max eta found
+    mineta = 0                      # min eta found
 
-    if outfiletype == 'binary':
+    if outfiletype == 'binary': # adjusting file reading
         readfunc = lambda a, b, c, d : np.fromfile(os.path.join(a, b)).reshape((c, d))
     else:
         readfunc = lambda a, b, c, d : np.loadtxt(os.path.join(a, b))
 
-    for file in progressbar(os.listdir(os.fsencode(odir)), "", 40):
+    for file in progressbar(os.listdir(os.fsencode(odir)), "", 40): # read all files in output
         filename = os.fsdecode(file)
         if "eta" in filename and not "etamean" in filename:
             numeta = numeta + 1
@@ -236,7 +237,7 @@ def main(argv):
     fig = plt.figure(figsize=(wid,leg), dpi=dpi)
     ax = fig.add_subplot(1,1,1)
     
-    if xmin < 0:
+    if xmin < 0:        # set up xmin, xmax, ymin, ymax
         xmin = 0
     if xmax < 0:
         xmax = Mglob
