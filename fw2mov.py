@@ -60,6 +60,7 @@ def main(argv):
     maxt = sys.maxsize
     depthtype = ''
     ismask = False
+    isquiver = False
 
     # parse *argv[] (is this securely done? no idea what's under the hood in c, so maybe...)
     try:
@@ -107,7 +108,8 @@ def main(argv):
             mint = int(arg)
         elif opt in ("-o, --odir"):
             odir = arg
-            print(odir)
+        elif opt in ("-varrow"):
+            odir = arg
 
     # parse log txt file
         # here's to hoping that the i/o of FUNWAVE-TVD doesn't get reworked
@@ -197,6 +199,7 @@ def main(argv):
     numsta = 0
     nummask = 0
     maxeta = 0
+    mineta = 0             
 
     if outfiletype == 'binary':
         readfunc = lambda a, b, c, d : np.fromfile(os.path.join(a, b)).reshape((c, d))
@@ -208,8 +211,17 @@ def main(argv):
         if "eta" in filename and not "etamean" in filename:
             numeta = numeta + 1
             fs = readfunc(odir, filename, Nglob, Mglob)
-            if (max(fs[1,]) >= maxeta):
-                maxeta = max(fs[1,])
+            if dim == '1d':
+                if (max(fs[1,]) > maxeta):
+                    maxeta = max(fs[1,])
+                if (min(fs[1,]) < mineta):
+                    mineta = min(fs[1,])
+            else:
+                for row in fs:
+                    if (max(row) > maxeta):
+                        maxeta = max(row)
+                    if (min(row) < mineta):
+                        mineta = min(row)
         elif "sta" in filename:
             numsta = numsta + 1
         elif "mask" in filename and not "mask9" in filename:
@@ -297,7 +309,7 @@ def main(argv):
                 plt.ylabel('X (m)', fontsize = 12, fontweight = 'bold')
                 plt.title("Time {:.5f} sec".format(plotint * i), fontsize = 12, fontweight = 'bold')
                 plt.colorbar().set_label(r'$\eta$'+' (m)', rotation=90)
-                plt.clim(-maxeta, maxeta)
+                plt.clim(mineta, maxeta)
                 writer.grab_frame()
             print("finishing...")
     plt.close()
