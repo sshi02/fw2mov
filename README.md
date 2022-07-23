@@ -32,10 +32,11 @@ All flags arguments take precedent over parameters parsed from LOG.txt
 - `-h`: help/usage
 - `-i, --ifile`: input file
 - `-o, --odir`: FUNWAVE output/result folder
-- `--1d`: 1-D figure output
-- `--2d`: 2-D figure output
+- `--1d`: toggle 1-D figure output
+- `--2d`: toggle 2-D figure output
 - `--wid`: figure width
 - `--len`: figure length
+- `--arrow`: toggle velocity arrows
 - `--dpi`: figure dpi
 - `--fps`: movie frames per second
 - `--xmin`: figure xlim, minimum argument
