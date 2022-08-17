@@ -3,7 +3,7 @@ from matplotlib.animation import FFMpegWriter
 import numpy as np
 import os, sys, getopt, time
 
-# progress bar - for looks and debugging
+# progress bar 
 def progressbar(it, prefix="", size=60, out=sys.stdout): # Python3.3+
     count = len(it)
     def show(j):
@@ -44,6 +44,34 @@ def breadMaskData(num, mglob, nglob, odir):
     freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
     return freeSurface
 
+# readUData reads... udata
+def readUData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'u_{0:05d}'.format(fileIndex)
+    freeSurface = np.loadtxt(fileName)
+    return freeSurface
+
+# readUData reading in binary
+def breadUData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'u_{0:05d}'.format(fileIndex)
+    freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
+    return freeSurface
+
+# readMaskData reads... vdata
+def readVData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'v_{0:05d}'.format(fileIndex)
+    freeSurface = np.loadtxt(fileName)
+    return freeSurface
+
+# readVData reading in binary
+def breadVData(num, mglob, nglob, odir):
+    fileIndex = num
+    fileName = odir+'/'+'v_{0:05d}'.format(fileIndex)
+    freeSurface = np.fromfile(fileName).reshape((nglob, mglob))
+    return freeSurface
+
 # wow! this sure is the main function
 def main(argv):
     # default vals
@@ -69,7 +97,7 @@ def main(argv):
         opts, args = getopt.getopt(argv, "hi:o:",
             ["ifile=", "odir=", "dpi=", "wid=","len=", 
             "1d", "2d", "xmin=", "xmax=", "ymin=", "ymax=", 
-            "fps=", "maxt=", "mint=", "varrow="])
+            "fps=", "maxt=", "mint=", "arrow="])
     except getopt.GetoptError:
         print('fw2mov.py -i <inputlogfile.txt>')
         sys.exit(2)
@@ -110,8 +138,9 @@ def main(argv):
             mint = int(arg)
         elif opt in ("-o, --odir"):
             odir = arg
-        elif opt in ("-varrow"):
-            odir = arg
+        elif opt in ("--arrow"):
+            qint = int(arg)
+            isquiver = True
 
     # parse log txt file
     print("--------------------")
@@ -165,7 +194,8 @@ def main(argv):
                         outputdir = parse[i].split(':')[1]
                         print("parsed output dir: "+ outputdir)
                     elif "OUT_MASK" in parse[i]:
-                        ismask = True
+                        if parse[i + 1] == 'T':
+                            ismask = True
     print("closing: " + logfilename)
     print("--------------------")
     
@@ -191,6 +221,13 @@ def main(argv):
         depth = np.full((Nglob, Mglob), -depthflat)
         for i in range(int(xslp), Mglob + 1): # refactor this for accuracy
             depth[:,Mglob] = depth[:,Mglob] + (i - xslp) * slp
+
+    # if 1d, 2d not specifed, default behavior
+    if dim == '':
+        if Nglob <= 3:
+            dim = '1d'
+        else:
+            dim = '2d'
     
     # skim eta and sta
     print("skimming output folder")
@@ -201,6 +238,8 @@ def main(argv):
     nummask = 0                     # number of mask files
     maxeta = 0                      # max eta found
     mineta = 0                      # min eta found
+    numu = 0
+    numv = 0
 
     if outfiletype == 'binary': # adjusting file reading
         readfunc = lambda a, b, c, d : np.fromfile(os.path.join(a, b)).reshape((c, d))
@@ -209,7 +248,7 @@ def main(argv):
 
     for file in progressbar(os.listdir(os.fsencode(odir)), "", 40): # read all files in output
         filename = os.fsdecode(file)
-        if "eta" in filename and not "etamean" in filename:
+        if "eta_" in filename:
             numeta = numeta + 1
             fs = readfunc(odir, filename, Nglob, Mglob)
             if dim == '1d':
@@ -223,14 +262,36 @@ def main(argv):
                         maxeta = max(row)
                     if (min(row) < mineta):
                         mineta = min(row)
-        elif "sta" in filename:
+        elif "sta_" in filename:
             numsta = numsta + 1
-        elif "mask" in filename and not "mask9" in filename:
+        elif "mask_" in filename and not "mask9" in filename:
             nummask = nummask + 1
+        elif "u_" in filename:
+            numu = numu + 1
+        elif "v_" in filename:
+            numv = numv + 1
     print("found: {:d} eta files".format(numeta))
     print("found: {:d} mask files".format(nummask))
-    print("found: {:d} sta files".format(numsta))
+    #print("found: {:d} sta files".format(numsta))
     print("found: {:.3f}m as max eta".format(maxeta))
+    print("found: {:.3f}m as min eta".format(mineta))
+    if isquiver:
+        print("found: {:d} u files".format(numu))
+        if dim == '2d':
+            print("found: {:d} v files".format(numv))
+
+    # file checks:
+    if not numeta == nummask:
+        print("warning: masking is off - number of eta vs mask files not equal")
+        ismask = False
+    if isquiver:
+        if not numeta == numu:
+            print("warning: quiver is off - number of eta vs u files not equal")
+            isquiver = False
+        elif dim == '2d':
+            if not numeta == numv:
+                print("warning: quiver is off - number of eta vs v files not equal")
+                isquiver = False
     print("--------------------")
     
     print("producing figure") 
@@ -248,24 +309,24 @@ def main(argv):
 
     writer = FFMpegWriter(fps = fps)
 
-    # if 1d, 2d not specifed, default behavior
-    if dim == '':
-        if Nglob <= 3:
-            dim = '1d'
-        else:
-            dim = '2d'
-
     if outfiletype == 'binary':
         readfunc = lambda a, b, c, d : breadETAData(a, b, c, d)
         maskfunc = lambda a, b, c, d : breadMaskData(a, b, c, d)
+        ufunc = lambda a, b, c, d : breadUData(a, b, c, d)
+        vfunc = lambda a, b, c, d : breadVData(a, b, c, d)
     else:
         readfunc = lambda a, b, c, d : readETAData(a, b, c, d)
         maskfunc = lambda a, b, c, d : readMaskData(a, b, c, d)
+        ufunc = lambda a, b, c, d : readUData(a, b, c, d)
+        vfunc = lambda a, b, c, d : readVData(a, b, c, d)
 
     if dim == '1d':
         with writer.saving(fig, 'mov_tint_{:d}_{:d}_xint_{:.0f}_{:.0f}.mp4'.format(mint, min(numeta,maxt), xmin, xmax), dpi):
             c = int(Nglob / 2)
             x = np.asarray([float(xa) * dx for xa in range(Mglob)])
+            if isquiver:
+                xu = np.asarray([float(xa) * dx * qint for xa in range(int(Mglob / qint))])
+                yu = np.zeros(xu.size)
             for i in progressbar(range(mint, min(numeta, maxt)), "", 40):
                 surf = readfunc(i, Mglob, Nglob, odir)
                 if ismask:
@@ -287,6 +348,18 @@ def main(argv):
                 plt.ylim((min(depth[c,:]) - 1, maxeta + 1))
                 plt.xlim(xmin * dx, xmax * dx)
 
+                if isquiver:
+                    ru = ufunc(i, Mglob, Nglob, odir)
+                    u = np.zeros(xu.size)
+                    for i in range(xu.size):
+                        u[i] = ru[c,i * qint]
+                    plt.quiver(xu[int(xmin / qint):int(xmax / qint)],
+                        yu[int(xmin / qint):int(xmax / qint)], 
+                        yu[int(xmin / qint):int(xmax / qint)],
+                        u[int(xmin / qint):int(xmax / qint)],
+                        scale = 10,
+                        alpha = 0.4)
+
                 plt.xlabel('Length (m)', fontsize = 12, fontweight = 'bold')
                 plt.ylabel('Height (m)', fontsize = 12, fontweight = 'bold')
                 plt.title("Time {:.5f} sec".format(plotint * i), fontsize = 12, fontweight = 'bold')
@@ -297,7 +370,9 @@ def main(argv):
         with writer.saving(fig, 'mov_tint_{:d}_{:d}_xint_{:.0f}_{:.0f}.mp4'.format(mint, min(numeta, maxt), xmin, xmax), dpi):
             x = np.asarray([float(xa)*dx for xa in range(Mglob)])
             y = np.asarray([float(ya)*dy for ya in range(Nglob)])
-            
+            if isquiver:
+                xu = np.asarray([float(xa) * dx * qint for xa in range(int(Mglob / qint))])
+                yu = np.asarray([float(ya) * dx * qint for ya in range(int(Nglob / qint))])
             for i in progressbar(range(mint, min(numeta, maxt)), "", 40):
                 surf = readfunc(i, Mglob, Nglob, odir)
                 if ismask:
@@ -311,6 +386,19 @@ def main(argv):
                 plt.title("Time {:.5f} sec".format(plotint * i), fontsize = 12, fontweight = 'bold')
                 plt.colorbar().set_label(r'$\eta$'+' (m)', rotation=90)
                 plt.clim(mineta, maxeta)
+                if isquiver:
+                    ru = ufunc(i, Mglob, Nglob, odir)
+                    rv = vfunc(i, Mglob, Nglob, odir)
+                    u = np.zeros(ru.shape)
+                    v = np.zeros(rv.shape)
+                    np.copyto(u, ru)
+                    np.copyto(v, rv)
+                    plt.quiver(xu[int(xmin / qint):int(xmax / qint)],
+                        yu[int(ymin / qint):int(ymax / qint)], 
+                        u[int(xmin / qint):int(xmax / qint)],
+                        v[int(ymin / qint):int(ymax / qint)],
+                        scale = 10,
+                        alpha = 0.2)
                 writer.grab_frame()
             print("finishing...")
     plt.close()
