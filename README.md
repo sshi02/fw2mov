@@ -36,7 +36,7 @@ All flags arguments take precedent over parameters parsed from LOG.txt
 - `--2d`: toggle 2-D figure output
 - `--wid`: figure width
 - `--len`: figure length
-- `--arrow`: toggle velocity arrows
+- `--arrow`: toggle velocity arrows (2d implementation buggy and may blow up)
 - `--dpi`: figure dpi
 - `--fps`: movie frames per second
 - `--xmin`: figure xlim, minimum argument
