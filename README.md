@@ -61,4 +61,4 @@ Fully Flagged Example<br />
 - max time = number of eta files
 
 ## Notes
-- dep.out in output is tremendously useful and best practice, since fw2py checks for it when constructing bathy
+- dep.out in output is tremendously useful and best practice, since fw2mov checks for it when constructing bathy
